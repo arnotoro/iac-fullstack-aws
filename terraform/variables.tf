@@ -9,9 +9,3 @@ variable "S3_bucket_name" {
   type        = string
   default     = "op-kiitorata-frontend-bucket-"
 }
-
-variable "backend_ecr_name" {
-  description = "The name of the ECR repository for the backend"
-  type        = string
-  default     = "kiitorata-backend-arno"
-}

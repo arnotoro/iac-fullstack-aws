@@ -12,13 +12,13 @@ terraform {
 provider "aws" {
     region = var.aws_region
 }
-
 # local variables
 locals {
-  backend_ecr_url = aws_ecr_repository.backend_repo.repository_url
+  # check if ECR repository exists, use it; otherwise, use the newly created one
+  backend_ecr_url = length(data.aws_ecr_repository.existing) > 0 ? data.aws_ecr_repository.existing[0].repository_url : aws_ecr_repository.backend_repo[0].repository_url
 }
 
-# S3 bucket for frontend
+# S3 Bucket for frontend
 resource "aws_s3_bucket" "frontend" {
   bucket = "${var.S3_bucket_name}${random_id.bucket_id.hex}"
   force_destroy = true
@@ -60,7 +60,6 @@ resource "aws_s3_bucket_policy" "frontend_policy" {
       ]
   })
 }
-
 
 # cloudfront for frontend
 # OAI to access S3 bucket files
@@ -110,7 +109,6 @@ resource "aws_cloudfront_distribution" "frontend_cf" {
 resource "null_resource" "frontend_deploy" {
   triggers = {
     backend_url = aws_cloudfront_distribution.backend_cf.domain_name
-    always_run = timestamp()
   }
 
   provisioner "local-exec" {
@@ -127,6 +125,7 @@ resource "null_resource" "frontend_deploy" {
       aws s3 sync .\dist s3://${aws_s3_bucket.frontend.bucket} --delete
       if ($LASTEXITCODE -ne 0) { throw "S3 sync failed" }
 
+      # invalidate CloudFront cache when rebuilding frontend
       aws cloudfront create-invalidation --distribution-id ${aws_cloudfront_distribution.frontend_cf.id} --paths "/*"
     EOT
   }
@@ -189,26 +188,31 @@ resource "aws_route_table_association" "b" {
   route_table_id = aws_route_table.public.id
 }
 
+
 # backend ECR repository
+data "aws_ecr_repository" "existing" {
+  name = "kiitorata-backend"
+  count = 1
+}
+
 resource "aws_ecr_repository" "backend_repo" {
-  name = var.backend_ecr_name
+  name = "kiitorata-backend"
+  count = length(data.aws_ecr_repository.existing) == 0 ? 1 : 0
   force_delete = true
 }
 
-# Build and Push Backend Docker Image
 # build and push backend Docker image to ECR repository
 resource "null_resource" "backend_docker_build" {
   triggers = {
     repo_url = local.backend_ecr_url
-    always_run = timestamp()
   }
 
     provisioner "local-exec" {
     command = <<EOT
       aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin ${local.backend_ecr_url}
       echo "Building backend Docker image..."
-      docker build -t ${var.backend_ecr_name} ../backend
-      docker tag ${var.backend_ecr_name}:latest ${local.backend_ecr_url}:latest
+      docker build -t kiitorata-backend ../backend
+      docker tag kiitorata-backend:latest ${local.backend_ecr_url}:latest
       docker push ${local.backend_ecr_url}:latest
     EOT
   }
@@ -266,7 +270,7 @@ resource "aws_ecs_task_definition" "backend" {
   ])
 
   depends_on = [null_resource.backend_docker_build] # ensure image is built and pushed before task definition
-} 
+}
 
 # security group for ECS service
 resource "aws_security_group" "ecs_service" {
@@ -293,7 +297,6 @@ resource "aws_security_group" "ecs_service" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
-
 
 # ALB for backend service
 resource "aws_lb" "backend_alb" {
@@ -323,8 +326,7 @@ resource "aws_lb_listener" "backend_listener" {
   }
 }
 
-
-# ECS service for backend
+# ECS service for backend container
 resource "aws_ecs_service" "backend_service" {
   name            = "backend-service"
   cluster         = aws_ecs_cluster.backend.id
@@ -366,19 +368,19 @@ resource "aws_cloudfront_distribution" "backend_cf" {
   default_root_object = ""
 
   default_cache_behavior {
-  allowed_methods  = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
-  cached_methods   = ["GET", "HEAD"]
-  target_origin_id = "backend-alb"
-  viewer_protocol_policy = "redirect-to-https"
+    allowed_methods  = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "backend-alb"
+    viewer_protocol_policy = "redirect-to-https"
 
-  forwarded_values {
-    query_string = true
-    headers      = ["Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"]
-    cookies {
-      forward = "all"
+    forwarded_values {
+      query_string = true
+      headers      = ["*"]
+      cookies {
+        forward = "all"
+      }
     }
   }
-}
 
   viewer_certificate {
     cloudfront_default_certificate = true

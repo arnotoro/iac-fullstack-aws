@@ -23,10 +23,9 @@ Before deploying, make sure you meet the following requirements:
 - Node.js and npm installed to build the React frontend
 
 ## Deployment using Terraform
-Terraform will create all the neccessary AWS resources. There are three variables you can customize when applying the configuration by passing them as `-var` arguments in the deployment stage or by changing the default values in `variables.tf`:
+Terraform will create all the neccessary AWS resources. There are two variables you can customize when applying the configuration by passing them as `-var` arguments in the deployment stage or by changing the default values in `variables.tf`:
 - `aws_region` (defaults to `eu-west-1`)
 - `S3_bucket_name` (defaults to `op-kiitorata-frontend-bucket-XXXXXXXX`)
-- `backend_ecr_name` (defaults to `kiitorata-backend-arno`)
 
 ### Steps to deploy
 1. Clone this repository:
