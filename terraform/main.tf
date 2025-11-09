@@ -8,7 +8,6 @@ terraform {
   }
 }
 
-
 # AWS region, default to eu-west-1
 provider "aws" {
     region = var.aws_region
@@ -16,8 +15,7 @@ provider "aws" {
 
 # local variables
 locals {
-  # check if ECR repository exists for docker image
-  backend_ecr_url = length(data.aws_ecr_repository.existing) > 0 ? data.aws_ecr_repository.existing[0].repository_url : aws_ecr_repository.backend_repo[0].repository_url
+  backend_ecr_url = aws_ecr_repository.backend_repo.repository_url
 }
 
 # S3 bucket for frontend
@@ -63,8 +61,8 @@ resource "aws_s3_bucket_policy" "frontend_policy" {
   })
 }
 
-# cloudfront for frontend
 
+# cloudfront for frontend
 # OAI to access S3 bucket files
 resource "aws_cloudfront_origin_access_identity" "frontend_oai" {}
 
@@ -111,6 +109,7 @@ resource "aws_cloudfront_distribution" "frontend_cf" {
 # frontend build and deployment, injecting backend URL into environment variables
 resource "null_resource" "frontend_deploy" {
   triggers = {
+    backend_url = aws_cloudfront_distribution.backend_cf.domain_name
     always_run = timestamp()
   }
 
@@ -190,19 +189,13 @@ resource "aws_route_table_association" "b" {
   route_table_id = aws_route_table.public.id
 }
 
-
 # backend ECR repository
-data "aws_ecr_repository" "existing" {
-  name = var.backend_ecr_name
-  count = 1
-}
-
 resource "aws_ecr_repository" "backend_repo" {
   name = var.backend_ecr_name
-  count = length(data.aws_ecr_repository.existing) == 0 ? 1 : 0
   force_delete = true
 }
 
+# Build and Push Backend Docker Image
 # build and push backend Docker image to ECR repository
 resource "null_resource" "backend_docker_build" {
   triggers = {
@@ -286,22 +279,19 @@ resource "aws_security_group" "ecs_service" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-}
-
-# allow ALB to communicate with ECS service on port 3000
-resource "aws_security_group_rule" "alb_to_ecs" {
-  type              = "ingress"
-  from_port         = 3000
-  to_port           = 3000
-  protocol          = "tcp"
-  security_group_id = aws_security_group.ecs_service.id
-  cidr_blocks       = ["0.0.0.0/0"]
 }
 
 
@@ -376,19 +366,19 @@ resource "aws_cloudfront_distribution" "backend_cf" {
   default_root_object = ""
 
   default_cache_behavior {
-    allowed_methods  = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "backend-alb"
-    viewer_protocol_policy = "redirect-to-https"
+  allowed_methods  = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+  cached_methods   = ["GET", "HEAD"]
+  target_origin_id = "backend-alb"
+  viewer_protocol_policy = "redirect-to-https"
 
-    forwarded_values {
-      query_string = true
-      headers      = ["*"]
-      cookies {
-        forward = "all"
-      }
+  forwarded_values {
+    query_string = true
+    headers      = ["Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"]
+    cookies {
+      forward = "all"
     }
   }
+}
 
   viewer_certificate {
     cloudfront_default_certificate = true
