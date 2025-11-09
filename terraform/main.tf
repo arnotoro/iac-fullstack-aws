@@ -192,7 +192,7 @@ resource "aws_route_table_association" "b" {
 # backend ECR repository
 data "aws_ecr_repository" "existing" {
   name = "kiitorata-backend"
-  count = 1
+  count = 0
 }
 
 resource "aws_ecr_repository" "backend_repo" {
