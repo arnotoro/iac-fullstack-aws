@@ -57,4 +57,5 @@ terraform destroy
 ### Non-idelities
 - The way the project is deployed to AWS may not be the most optimal or cost-efficient way. 
 - The front and backend are built with Terraform using `null_resource` and `local-exec` provisioners. The reason behind this choice was to make the project deployable with a single command.
+- The Terraform `null_resource` with `local-exec` provisioners relies on Windows PowerShell, making the project non-portable to Unix-based systems. This somewhat defeats the purpose of infrastructure-as-code
 - Network security groups allow all outbound traffic for simplicity. There is effectively no firewall for backend.
