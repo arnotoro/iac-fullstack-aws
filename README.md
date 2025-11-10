@@ -54,7 +54,7 @@ To remove the deployed resources, run the following command in the `terraform` d
 terraform destroy
 ```
 
-### Non-idelities
+### Non-idealities
 - The way the project is deployed to AWS may not be the most optimal or cost-efficient way. 
 - The front and backend are built with Terraform using `null_resource` and `local-exec` provisioners. The reason behind this choice was to make the project deployable with a single command.
 - The Terraform `null_resource` with `local-exec` provisioners relies on Windows PowerShell, making the project non-portable to Unix-based systems. This somewhat defeats the purpose of infrastructure-as-code.
