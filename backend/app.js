@@ -5,20 +5,26 @@ const app = express();
 const port = 3000;
 
 app.use(cors({
-  origin: true,
+  origin: "*",
   methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
   allowedHeaders: ["Content-Type","Authorization"],
-  credentials: true
-}));
-
-app.options("*", cors({
-  origin: true,
-  methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
-  allowedHeaders: ["Content-Type","Authorization"],
-  credentials: true
+  credentials: false
 }));
 
 app.use(express.json());
+
+// Fallback: ensure CORS headers are always present even if a proxy strips them.
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  // Do not set Access-Control-Allow-Credentials here since credentials is false
+  if (req.method === 'OPTIONS') {
+    // Respond to preflight requests immediately
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 app.get('/', (req, res) => {
   res.send('Hello World!');
@@ -40,7 +46,7 @@ app.post('/api/sum', (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log('Listening on port', port);
+  console.log('Listening on port', port);
 });
 
-module.exports = app;
+export default app;

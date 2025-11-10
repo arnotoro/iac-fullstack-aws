@@ -12,9 +12,9 @@ output "s3_bucket_name" {
 }
 
 # debug
-# output "alb_dns_name" {
-#   value = aws_lb.backend_alb.dns_name
-# }
-# output "backend_ecr_url" {
-#   value = local.backend_ecr_url
-# }
+output "alb_dns_name" {
+  value = aws_lb.backend_alb.dns_name
+}
+output "backend_ecr_url" {
+  value = local.backend_ecr_url
+}

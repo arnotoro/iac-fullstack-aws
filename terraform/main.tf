@@ -15,7 +15,7 @@ provider "aws" {
 # local variables
 locals {
   # check if ECR repository exists, use it; otherwise, use the newly created one
-  backend_ecr_url = length(data.aws_ecr_repository.existing) > 0 ? data.aws_ecr_repository.existing[0].repository_url : aws_ecr_repository.backend_repo[0].repository_url
+  backend_ecr_url = aws_ecr_repository.backend_repo.repository_url
 }
 
 # S3 Bucket for frontend
@@ -190,33 +190,32 @@ resource "aws_route_table_association" "b" {
 
 
 # backend ECR repository
-data "aws_ecr_repository" "existing" {
-  name = "kiitorata-backend"
-  count = 0
-}
-
 resource "aws_ecr_repository" "backend_repo" {
-  name = "kiitorata-backend"
-  count = length(data.aws_ecr_repository.existing) == 0 ? 1 : 0
+  name         = "kiitorata-backend"
   force_delete = true
 }
 
 # build and push backend Docker image to ECR repository
 resource "null_resource" "backend_docker_build" {
+  # Rebuild if Dockerfile or code changes
   triggers = {
-    repo_url = local.backend_ecr_url
+    always_run = timestamp()
+    repo_url   = aws_ecr_repository.backend_repo.repository_url
   }
 
-    provisioner "local-exec" {
+  provisioner "local-exec" {
+    interpreter = ["PowerShell", "-Command"]
     command = <<EOT
-      aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin ${local.backend_ecr_url}
-      echo "Building backend Docker image..."
+      $pass = aws ecr get-login-password --region ${var.aws_region}
+      docker login --username AWS --password $pass ${aws_ecr_repository.backend_repo.repository_url}
+
       docker build -t kiitorata-backend ../backend
-      docker tag kiitorata-backend:latest ${local.backend_ecr_url}:latest
-      docker push ${local.backend_ecr_url}:latest
+      docker tag kiitorata-backend:latest ${aws_ecr_repository.backend_repo.repository_url}:latest
+      docker push ${aws_ecr_repository.backend_repo.repository_url}:latest
     EOT
   }
 }
+
 
 # ECS cluster for backend service
 resource "aws_ecs_cluster" "backend" {
@@ -258,7 +257,7 @@ resource "aws_ecs_task_definition" "backend" {
   container_definitions = jsonencode([
     {
       name      = "backend"
-      image     = "${local.backend_ecr_url}:latest"
+      image     = "${aws_ecr_repository.backend_repo.repository_url}:latest"
       essential = true
       portMappings = [
         {
@@ -375,7 +374,7 @@ resource "aws_cloudfront_distribution" "backend_cf" {
 
     forwarded_values {
       query_string = true
-      headers      = ["*"]
+      headers      = ["Origin"]
       cookies {
         forward = "all"
       }

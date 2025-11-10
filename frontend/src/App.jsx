@@ -21,9 +21,9 @@ function App() {
     try {
       const response = await fetch(`${apiUrl}/api/sum`, {
         method: 'POST',
+        mode: 'cors',
         headers: {
-          'Content-Type': 'application/json',
-          'mode': 'cors'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           a: Number(a),
